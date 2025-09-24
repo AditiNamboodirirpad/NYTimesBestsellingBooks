@@ -42,9 +42,12 @@ This project utilizes the New York Times Best Sellers API to collect and analyze
 
 The project is ongoing and will likely include the following in future notebooks:
 
-- Data cleaning and preprocessing for in-depth analysis.
-- Trend analysis over time or across book categories.
-- Data visualization and dashboarding.
-- Potential integration with external sources like Amazon or Goodreads.
+- Data cleaning and preprocessing for more robust and in-depth analysis.
+- Trend analysis across time and book categories to identify patterns in readership.
+- Data visualization and dashboarding to present insights in an accessible format.
+- Integration with external sources like Amazon or Goodreads to enrich the dataset.
+- Cloud storage on **Google Cloud Storage (GCS)** to ensure scalability and accessibility of the data.
+- Containerization with **Docker** to make the application portable and reproducible across environments.
+- Automated scheduling with **Crontab**, so that the bestseller list is updated every week without manual intervention.
 
 ---
