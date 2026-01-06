@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+streamlit
+pydantic
+pandas
+python-dotenv
+google-cloud-storage
