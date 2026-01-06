@@ -1,0 +1,36 @@
+# Environment / secrets
+.env
+*.env
+.ssh/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Editors / OS
+.DS_Store
+.idea/
+.vscode/
+.ipynb_checkpoints
+*.swp
+*.swo
+
+# Data artifacts
+data/raw/
+
+# Logs / coverage
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+
+
