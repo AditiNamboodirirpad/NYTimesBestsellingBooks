@@ -1,7 +1,7 @@
 # Environment / secrets
 .env
 *.env
-.ssh/
+
 
 # Python
 __pycache__/
@@ -32,5 +32,7 @@ data/raw/
 .pytest_cache/
 .coverage
 htmlcov/
+
+keys/
 
 

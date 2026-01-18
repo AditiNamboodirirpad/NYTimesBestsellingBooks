@@ -6,7 +6,7 @@ from datetime import datetime
 
 from src.api_clients.nyt_client import get_best_list
 
-RAW_DIR = "data/raw"
+RAW_DIR = "data/raw/weekly"
 
 
 def fetch_and_save(list_name: str = "hardcover-fiction") -> str:

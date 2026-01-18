@@ -1,4 +1,5 @@
 version: "3.9"
+
 services:
   fastapi:
     build:
@@ -8,6 +9,12 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /app/keys/nytimesbestsellingbooks-c0aa3cec63b7.json
+      GCS_BUCKET: nytimes-bucket
+    volumes:
+      - ./data:/app/data
+      - ./keys:/app/keys:ro
 
   streamlit:
     build:
@@ -15,3 +22,11 @@ services:
       dockerfile: Dockerfile.streamlit
     ports:
       - "8501:8501"
+    env_file:
+    - .env
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /app/keys/nytimesbestsellingbooks-c0aa3cec63b7.json
+      GCS_BUCKET: nytimes-bucket
+    volumes:
+      - ./data:/app/data
+      - ./keys:/app/keys:ro
