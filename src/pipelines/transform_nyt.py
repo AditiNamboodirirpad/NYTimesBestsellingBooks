@@ -4,8 +4,8 @@ import json
 import csv
 import os
 
-RAW_DIR = "data/raw"
-PROCESSED_DIR = "data/processed"
+RAW_DIR = "data/raw/weekly"
+PROCESSED_DIR = "data/processed/weekly"
 
 
 def transform_latest() -> str:

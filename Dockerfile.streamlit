@@ -8,12 +8,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
+
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# Include app code and processed data (override with a volume if you mount fresh data).
-COPY streamlit_app ./streamlit_app
-COPY data ./data
+COPY . .
+
+ENV PYTHONPATH=/app
 
 EXPOSE 8501
 
