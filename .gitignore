@@ -25,7 +25,7 @@ env/
 *.swo
 
 # Data artifacts
-data/raw/
+data/
 
 # Logs / coverage
 *.log
