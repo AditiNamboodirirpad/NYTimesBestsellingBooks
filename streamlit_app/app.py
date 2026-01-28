@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
+import os
 
 import pandas as pd
 import streamlit as st
@@ -16,6 +17,9 @@ import requests
 FILENAME_PREFIX = "nyt_transformed_"
 FILENAME_SUFFIX = "_apple"
 FILENAME_PATTERN = f"{FILENAME_PREFIX}*{FILENAME_SUFFIX}.csv"
+
+FASTAPI_URL = os.getenv("FASTAPI_URL", "http://fastapi:8000/pipeline/run")
+RUN_PIPELINE_ON_LOAD = os.getenv("RUN_PIPELINE_ON_LOAD", "true").lower() in {"1", "true", "yes"}
 
 @st.cache_data
 def get_recommendations_from_gcs() -> pd.DataFrame:
@@ -128,16 +132,17 @@ def main() -> None:
 
         st.subheader("Refreshing data…")
 
-        FASTAPI_URL = "http://fastapi:8000/pipeline/run"
+        if RUN_PIPELINE_ON_LOAD:
+            with st.spinner("Running pipeline… please wait"):
+                try:
+                    resp = requests.post(FASTAPI_URL, timeout=120)
+                    resp.raise_for_status()
+                    st.success("Pipeline refreshed successfully! 🎉")
 
-        with st.spinner("Running pipeline… please wait"):
-            try:
-                resp = requests.post(FASTAPI_URL, timeout=120)
-                resp.raise_for_status()
-                st.success("Pipeline refreshed successfully! 🎉")
-
-            except Exception as e:
-                st.error(f"Pipeline failed: {e}")
+                except Exception as e:
+                    st.error(f"Pipeline failed: {e}")
+        else:
+            st.info("Pipeline trigger is disabled for this environment.")
 
 
         latest_path, filename = get_latest_file()
