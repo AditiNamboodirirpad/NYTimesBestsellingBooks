@@ -9,16 +9,13 @@ a single recommendations CSV for downstream consumption
 
 from __future__ import annotations
 
-from pathlib import Path
 import pandas as pd
+import tempfile
+from pathlib import Path
 
+import os
+from src.services.gcs_service import download_file, upload_file
 
-# =========================
-# Paths
-# =========================
-HISTORY_FILE = Path("data/processed/history/nyt_history_weekly.csv")
-OUTPUT_DIR = Path("data/processed/recommendations")
-OUTPUT_FILE = OUTPUT_DIR / "recommendations.csv"
 
 
 # =========================
@@ -37,43 +34,78 @@ def build_recommendations() -> str:
     # --- Load history ---
     df = load_history()
 
-    # --- Build categories (placeholders for now) ---
+
     rec_category_1 = build_category_1(df)
     rec_category_2 = build_category_2(df)
     rec_category_3 = build_category_3(df)
 
-    # --- Combine all categories ---
     recommendations = combine_categories(
         rec_category_1,
         rec_category_2,
         rec_category_3,
     )
 
-    # --- Save ---
     save_recommendations(recommendations)
+    return "processed/recommendations/recommendations.csv"
 
-    return str(OUTPUT_FILE)
 
 
 # =========================
 # Helpers
 # =========================
 def load_history() -> pd.DataFrame:
-    """Load historical NYT bestseller data."""
-    if not HISTORY_FILE.exists():
-        raise FileNotFoundError(f"History file not found: {HISTORY_FILE}")
+    bucket = os.getenv("GCS_BUCKET")
+    if not bucket:
+        raise ValueError("GCS_BUCKET is not set")
 
-    df = pd.read_csv(
-        HISTORY_FILE,
+    history_blob = "processed/history/nyt_history_weekly.csv"
+    tmp_history_path = Path(tempfile.gettempdir()) / Path(history_blob).name
+    local_path = download_file(history_blob, str(tmp_history_path))
+
+    return pd.read_csv(
+        local_path,
         parse_dates=["published_date", "bestsellers_date"]
     )
-    return df
+
 
 
 def save_recommendations(df: pd.DataFrame) -> None:
-    """Persist recommendations to disk."""
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    df.to_csv(OUTPUT_FILE, index=False)
+    bucket = os.getenv("GCS_BUCKET")
+    if not bucket:
+        raise ValueError("GCS_BUCKET is not set")
+
+    recommendations_blob = "processed/recommendations/recommendations.csv"
+    existing_df = None
+
+    try:
+        tmp_existing_path = Path(tempfile.gettempdir()) / Path(recommendations_blob).name
+        existing_path = download_file(recommendations_blob, str(tmp_existing_path))
+        existing_df = pd.read_csv(existing_path)
+    except FileNotFoundError:
+        existing_df = None
+
+    if existing_df is not None and not existing_df.empty:
+        combined_df = pd.concat([existing_df, df], ignore_index=True)
+    else:
+        combined_df = df.copy()
+
+    combined_df = combined_df.drop_duplicates(
+        subset=["title", "category", "published_date"]
+    )
+
+    # Write to temp file only
+    with tempfile.NamedTemporaryFile(
+        mode="w", newline="", encoding="utf-8", delete=False
+    ) as tmp:
+        combined_df.to_csv(tmp.name, index=False)
+        tmp_path = tmp.name
+
+    # Upload to GCS
+    upload_file(
+        tmp_path,
+        recommendations_blob
+    )
+
 
 
 # =========================
