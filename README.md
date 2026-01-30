@@ -3,7 +3,7 @@
 End-to-end portfolio project that pulls the New York Times bestseller list, normalizes it to CSV, enriches it with Apple Books metadata, and exposes the results through a FastAPI service and a Streamlit dashboard. Artifacts can be persisted locally or pushed to Google Cloud Storage (GCS), with an optional Cloud Scheduler job to refresh weekly.
 
 ## Live Demo
-- Streamlit Dashboard URL: https://nytimes-streamlit-761198761992.us-central1.run.app
+- Streamlit Dashboard URL: https://nytimes-streamlit-761198761992.us-central1.run.app/
 
 ## Highlights
 - Automated pipeline: fetch → transform → enrich → history → recommendations
@@ -11,9 +11,18 @@ End-to-end portfolio project that pulls the New York Times bestseller list, norm
 - Streamlit UI with filters, recommendations, and LLM insights
 - Dockerized services and Cloud Run/Scheduler deployment flow
 
+## What this app does
+- Pulls the latest NYT bestseller list (configurable list name) and stores the raw JSON in GCS for traceability
+- Normalizes weekly lists into clean CSVs with consistent fields (rank, author, ISBN13, publisher, description, etc.)
+- Enriches weekly data with Apple Books metadata (pricing, ratings, and store links) for downstream analysis
+- Maintains a historical weekly table that appends new weeks and avoids duplicates
+- Generates recommendation categories (Fast Movers, Consistent Performers, Sustained Momentum) for the UI
+- Exposes FastAPI endpoints to run the pipeline on demand and list stored artifacts in GCS
+- Powers a Streamlit dashboard with filters and recommendation views backed by GCS data
+
 ## Architecture (high level)
 1. FastAPI triggers the pipeline on demand.
-2. The pipeline writes raw + processed CSVs locally and (optionally) uploads to GCS.
+2. The pipeline writes raw + processed artifacts directly to GCS.
 3. Streamlit loads the latest processed outputs from GCS and renders the UI.
 4. (Optional) Cloud Scheduler calls the API on a schedule.
 
@@ -71,12 +80,12 @@ python -m src.pipelines.run_full_pipeline
 streamlit run streamlit_app/app.py
 ```
 
-## Pipeline Outputs
-- Raw NYT JSON: `data/raw/weekly/nyt_<list>_<timestamp>.json`
-- Processed weekly CSV: `data/processed/weekly/nyt_transformed_<date>.csv`
-- Enriched weekly CSV: `data/processed/weekly/nyt_transformed_<date>_apple.csv`
-- History table: `data/processed/history/nyt_history_weekly.csv`
-- Recommendations: `data/processed/recommendations/recommendations.csv`
+## Pipeline Outputs (GCS)
+- Raw NYT JSON: `raw/weekly/nyt_<list>_<timestamp>.json`
+- Processed weekly CSV: `processed/weekly/nyt_transformed_<date>.csv`
+- Enriched weekly CSV: `processed/weekly/nyt_transformed_<date>_apple.csv`
+- History table: `processed/history/nyt_history_weekly.csv`
+- Recommendations (appends + de-duplicates by title/category/published_date): `processed/recommendations/recommendations.csv`
 
 ## FastAPI Service
 Start locally:
@@ -86,7 +95,7 @@ uvicorn src.fastapi_app.main:app --reload --port 8000
 
 Routes:
 - `GET /health` – health check
-- `POST /pipeline/run` – fetch, transform, enrich, upload artifacts
+- `POST /pipeline/run` – fetch, transform, enrich, upload artifacts (returns GCS blob paths)
 - `GET /files` – list all blobs in `GCS_BUCKET`
 - `GET /files/processed` – list processed weekly CSVs
 - `GET /files/raw` – list raw weekly JSONs
