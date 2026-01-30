@@ -1,4 +1,9 @@
 """Fetch historical NYT bestseller lists."""
+# NOTE:
+# This script is a one-time historical backfill.
+# Outputs have already been uploaded to GCS.
+# It is not part of the live pipeline.
+
 
 from __future__ import annotations
 

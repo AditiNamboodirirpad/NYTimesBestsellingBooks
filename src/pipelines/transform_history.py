@@ -1,13 +1,15 @@
 """Build and maintain a historical NYT bestseller table (append weekly rows)."""
 
-import os
 import json
 import csv
 from pathlib import Path
+import os
+import tempfile
 
-RAW_DIR = Path("data/raw/weekly")
-HISTORY_DIR = Path("data/processed/history")
-HISTORY_FILE = HISTORY_DIR / "nyt_history_weekly.csv"
+from src.services.gcs_service import download_file, upload_file, list_files
+
+HISTORY_BLOB = "processed/history/nyt_history_weekly.csv"
+RAW_PREFIX = "raw/weekly/"
 
 
 COLUMNS = [
@@ -28,15 +30,24 @@ COLUMNS = [
 
 
 def transform_history() -> str:
-    """Append the newest NYT weekly list to the historical CSV."""
+    """Append the newest NYT weekly list to the historical CSV stored in GCS."""
 
-    files = sorted([f for f in RAW_DIR.iterdir() if f.suffix == ".json"])
-    if not files:
-        raise FileNotFoundError("No raw NYT JSON files found in data/raw/weekly/")
+    bucket = os.getenv("GCS_BUCKET")
+    if not bucket:
+        raise ValueError("GCS_BUCKET is not set.")
 
-    latest = files[-1]
+    # List raw weekly JSONs from GCS
+    raw_blobs = sorted(list_files(prefix=RAW_PREFIX))
+    if not raw_blobs:
+        raise FileNotFoundError("No raw NYT JSON files found in GCS.")
 
-    with open(latest, "r") as f:
+    latest_blob = raw_blobs[-1]
+
+    # Download latest raw JSON to temp file
+    tmp_raw_path = Path(tempfile.gettempdir()) / Path(latest_blob).name
+    raw_path = download_file(latest_blob, str(tmp_raw_path))
+
+    with open(raw_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     results = data["results"]
@@ -44,9 +55,9 @@ def transform_history() -> str:
     published_date = results["published_date"]
     bestsellers_date = results["bestsellers_date"]
 
-    rows = []
+    new_rows = []
     for b in results["books"]:
-        rows.append(
+        new_rows.append(
             [
                 published_date,
                 bestsellers_date,
@@ -64,32 +75,43 @@ def transform_history() -> str:
             ]
         )
 
-    # ensure directory exists
-    HISTORY_DIR.mkdir(parents=True, exist_ok=True)
 
-    # if file does NOT exist → create + write header
-    if not HISTORY_FILE.exists():
-        with open(HISTORY_FILE, "w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(COLUMNS)
-            writer.writerows(rows)
+    # Download existing history if present
+    try:
+        tmp_history_path = Path(tempfile.gettempdir()) / Path(HISTORY_BLOB).name
+        existing_path = download_file(HISTORY_BLOB, str(tmp_history_path))
+    except FileNotFoundError:
+        existing_path = None
 
-    else:
-        with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+
+    existing_dates: set[str] = set()
+    existing_rows: list[list[str]] = []
+
+    if existing_path is not None:
+        with open(existing_path, "r", encoding="utf-8", newline="") as f:
             reader = csv.DictReader(f)
-            existing_dates = {row["published_date"] for row in reader}
+            for row in reader:
+                existing_dates.add(row["published_date"])
+                existing_rows.append([row.get(col, "") for col in COLUMNS])
 
-        if published_date in existing_dates:
-            print(f"Week {published_date} already exists — skipping append.")
-            return str(HISTORY_FILE)
+    if published_date in existing_dates:
+        print(f"Week {published_date} already exists — skipping append.")
+        return HISTORY_BLOB
 
+    # Combine existing rows + new rows
+    combined_rows = existing_rows + new_rows
 
-        with open(HISTORY_FILE, "a", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerows(rows)
+    # Write to a temp file, then upload
+    with tempfile.NamedTemporaryFile(mode="w", newline="", encoding="utf-8", delete=False) as tmp:
+        writer = csv.writer(tmp)
+        writer.writerow(COLUMNS)
+        writer.writerows(combined_rows)
+        tmp_path = tmp.name
 
-    print(f"Updated history file: {HISTORY_FILE}")
-    return str(HISTORY_FILE)
+    upload_file(tmp_path, HISTORY_BLOB)
+
+    print(f"Updated history file in GCS: {HISTORY_BLOB}")
+    return HISTORY_BLOB
 
 
 if __name__ == "__main__":

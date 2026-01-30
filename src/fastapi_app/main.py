@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from pathlib import Path
 from src.pipelines.fetch_nyt_weekly import fetch_and_save
 from src.pipelines.transform_nyt import transform_latest
-from src.services.gcs_service import upload_file, list_files
+from src.services.gcs_service import list_files
 from src.pipelines.enrich_with_apple import enrich_with_apple
 from src.pipelines.transform_history import transform_history
 from src.pipelines.build_recommendations import build_recommendations
@@ -21,48 +21,34 @@ def health() -> dict[str, str]:
 @app.post("/pipeline/run")
 def run_pipeline() -> dict[str, str]:
     """Run fetch → transform → enrich, then upload artifacts to GCS."""
-    # 1. Fetch NYT JSON locally
-    raw_path = fetch_and_save()
+    # 1. Fetch NYT JSON and upload to GCS
+    raw_blob = fetch_and_save()
 
-    # 2. Transform to CSV
-    csv_path = transform_latest()
+    # 2. Transform to CSV and upload to GCS
+    csv_blob = transform_latest()
 
-    # 3. Enrich with Apple and save new CSV
-    apple_csv_path = str(
-        Path(csv_path).with_name(
-            Path(csv_path).stem + "_apple" + Path(csv_path).suffix
+    # 3. Enrich with Apple and save new CSV to GCS
+    apple_csv_blob = str(
+        Path(csv_blob).with_name(
+            Path(csv_blob).stem + "_apple" + Path(csv_blob).suffix
         )
     )
 
-    enrich_with_apple(csv_path, apple_csv_path)
+    enrich_with_apple(csv_blob, apple_csv_blob)
 
-    # 4. Append to historical table
-    history_path = transform_history()
+    # 4. Append to historical table in GCS
+    history_blob = transform_history()
 
-    # 5. Rebuild recommendations
-    recommendations_path = build_recommendations()
-
-    # 4. Upload artifacts to GCS
-    raw_uri = upload_file(raw_path, f"raw/weekly/{Path(raw_path).name}")
-    csv_uri = upload_file(csv_path, f"processed/weekly/{Path(csv_path).name}")
-    apple_uri = upload_file(apple_csv_path, f"processed/weekly/{Path(apple_csv_path).name}")
-    history_uri = upload_file(
-        history_path,
-        "processed/history/nyt_history_weekly.csv"
-    )
-
-    recs_uri = upload_file(
-        recommendations_path,
-        "processed/recommendations/recommendations.csv"
-    )
+    # 5. Rebuild recommendations in GCS
+    recommendations_blob = build_recommendations()
 
     return {
         "message": "Pipeline complete",
-        "raw_uploaded": raw_uri,
-        "csv_uploaded": csv_uri,
-        "apple_uploaded": apple_uri,
-        "history_uploaded": history_uri,
-        "recommendations_uploaded": recs_uri,
+        "raw_uploaded": raw_blob,
+        "csv_uploaded": csv_blob,
+        "apple_uploaded": apple_csv_blob,
+        "history_uploaded": history_blob,
+        "recommendations_uploaded": recommendations_blob,
     }
 
 

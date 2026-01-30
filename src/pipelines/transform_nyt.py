@@ -3,37 +3,47 @@
 import json
 import csv
 import os
+import tempfile
+from pathlib import Path
 
-RAW_DIR = "data/raw/weekly"
-PROCESSED_DIR = "data/processed/weekly"
+from src.services.gcs_service import list_files, download_file, upload_file
+
+RAW_PREFIX = "raw/weekly/"
+PROCESSED_PREFIX = "processed/weekly/"
 
 
 def transform_latest() -> str:
-    """Convert the most recent raw NYT JSON file into a structured CSV.
+    """Convert the most recent raw NYT JSON in GCS into a structured CSV and upload it back to GCS."""
 
-    The function finds the newest JSON in ``data/raw/``, extracts weekly list metadata
-    and book entries, and writes a normalized CSV to ``data/processed/``.
+    bucket = os.getenv("GCS_BUCKET")
+    if not bucket:
+        raise ValueError("GCS_BUCKET is not set.")
 
-    Returns
-    -------
-    str
-        Path to the generated CSV file.
-    """
-    files = sorted([f for f in os.listdir(RAW_DIR) if f.endswith(".json")])
-    latest = os.path.join(RAW_DIR, files[-1])
+    # List raw weekly JSONs from GCS
+    raw_blobs = sorted(list_files(prefix=RAW_PREFIX))
+    if not raw_blobs:
+        raise FileNotFoundError("No raw NYT JSON files found in GCS.")
 
-    with open(latest, "r") as f:
+    latest_blob = raw_blobs[-1]
+
+    # Download latest raw JSON to temp file
+    tmp_path = Path(tempfile.gettempdir()) / Path(latest_blob).name
+    raw_path = download_file(latest_blob, str(tmp_path))
+
+    with open(raw_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
     results = data["results"]
     week = results["published_date"]
     books = results["books"]
 
-    os.makedirs(PROCESSED_DIR, exist_ok=True)
-    output_file = os.path.join(PROCESSED_DIR, f"nyt_transformed_{week}.csv")
+    output_blob = f"{PROCESSED_PREFIX}nyt_transformed_{week}.csv"
 
-    with open(output_file, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
+    # Write CSV to temp file
+    with tempfile.NamedTemporaryFile(
+        mode="w", newline="", encoding="utf-8", delete=False
+    ) as tmp:
+        writer = csv.writer(tmp)
 
         writer.writerow(
             [
@@ -61,9 +71,14 @@ def transform_latest() -> str:
                     b["amazon_product_url"],
                 ]
             )
+        tmp_path = tmp.name
 
-    print(f"Saved: {output_file}")
-    return output_file
+    # Upload to GCS
+    upload_file(tmp_path, output_blob)
+
+    print(f"Uploaded: {output_blob}")
+    return output_blob
+
 
 
 if __name__ == "__main__":
